@@ -18,7 +18,8 @@ myVideo.muted = true;
 let myStream = null;
 let isVideoEnabled = true;
 let isAudioEnabled = true;
-let currentCameraFacing = 'user'; // Track current camera facing mode
+let currentCameraDeviceId = null;
+let availableCameras = [];
 
 // Store peer connections and user IDs
 const peerConnections = new Map();
@@ -59,14 +60,62 @@ const showSuccess = (message) => {
   setTimeout(() => successDiv.remove(), 3000);
 };
 
-// Initialize media devices
+// Set up UI controls
+const setupControls = () => {
+  const videoBtn = document.querySelector('.fa-video').parentElement;
+  const audioBtn = document.querySelector('.fa-microphone').parentElement;
+  const leaveBtn = document.querySelector('.fa-phone-slash').parentElement;
+  const switchCameraBtn = document.getElementById('camera-switch-btn');
+
+  videoBtn.addEventListener('click', toggleVideo);
+  audioBtn.addEventListener('click', toggleAudio);
+  leaveBtn.addEventListener('click', leaveRoom);
+
+  // Only show and setup camera switch if device has multiple cameras
+  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
+    updateAvailableCameras().then(() => {
+      if (availableCameras.length > 1) {
+        switchCameraBtn.style.display = 'flex';
+        switchCameraBtn.addEventListener('click', switchCamera);
+      }
+    });
+  }
+};
+
+// Function to update available cameras
+const updateAvailableCameras = async () => {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    availableCameras = devices.filter(device => device.kind === 'videoinput');
+    console.log('Available cameras:', availableCameras);
+    
+    // Set initial camera device ID if not set
+    if (!currentCameraDeviceId && availableCameras.length > 0) {
+      currentCameraDeviceId = availableCameras[0].deviceId;
+    }
+    
+    return availableCameras;
+  } catch (error) {
+    console.error('Error getting cameras:', error);
+    return [];
+  }
+};
+
+// Initialize media devices with specific constraints
 const initializeMedia = async () => {
   try {
     console.log('Initializing media devices...');
-    myStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+    
+    // First get available cameras
+    await updateAvailableCameras();
+    
+    // Get user media with specific device if available
+    const constraints = {
+      video: currentCameraDeviceId ? { deviceId: { exact: currentCameraDeviceId } } : true,
       audio: true
-    });
+    };
+    
+    myStream = await navigator.mediaDevices.getUserMedia(constraints);
     
     // Update UI to reflect successful media access
     showSuccess('Camera and microphone access granted');
@@ -101,33 +150,6 @@ const initializeMedia = async () => {
   } catch (error) {
     console.error('Error accessing media devices:', error);
     showError('Please enable camera and microphone permissions!');
-  }
-};
-
-// Set up UI controls
-const setupControls = () => {
-  const videoBtn = document.querySelector('.fa-video').parentElement;
-  const audioBtn = document.querySelector('.fa-microphone').parentElement;
-  const leaveBtn = document.querySelector('.fa-phone-slash').parentElement;
-  const switchCameraBtn = document.getElementById('camera-switch-btn');
-
-  videoBtn.addEventListener('click', toggleVideo);
-  audioBtn.addEventListener('click', toggleAudio);
-  leaveBtn.addEventListener('click', leaveRoom);
-
-  // Only show and setup camera switch if device has multiple cameras
-  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
-    navigator.mediaDevices.enumerateDevices()
-      .then(devices => {
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        if (videoDevices.length > 1) {
-          switchCameraBtn.style.display = 'flex';
-          switchCameraBtn.addEventListener('click', switchCamera);
-        }
-      })
-      .catch(err => {
-        console.error('Error enumerating devices:', err);
-      });
   }
 };
 
@@ -173,42 +195,57 @@ const toggleAudio = () => {
 // Switch camera function
 const switchCamera = async () => {
   try {
-    // Toggle between front and back cameras
-    currentCameraFacing = currentCameraFacing === 'user' ? 'environment' : 'user';
+    // Get updated list of cameras
+    await updateAvailableCameras();
     
-    // Get new video stream with different camera
+    if (availableCameras.length < 2) {
+      showError('No additional cameras found');
+      return;
+    }
+
+    // Find next camera
+    const currentIndex = availableCameras.findIndex(camera => camera.deviceId === currentCameraDeviceId);
+    const nextIndex = (currentIndex + 1) % availableCameras.length;
+    currentCameraDeviceId = availableCameras[nextIndex].deviceId;
+
+    console.log(`Switching to camera: ${availableCameras[nextIndex].label}`);
+
+    // Get new stream with selected camera
     const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: currentCameraFacing },
+      video: { deviceId: { exact: currentCameraDeviceId } },
       audio: true
     });
-    
-    // Stop all tracks on the old stream
+
+    // Stop old tracks
     if (myStream) {
       myStream.getTracks().forEach(track => track.stop());
     }
-    
-    // Replace old stream with new stream
+
+    // Update stream
     myStream = newStream;
     myVideo.srcObject = newStream;
-    
-    // Update all peer connections with the new stream
+
+    // Update all peer connections with new tracks
     const videoTrack = newStream.getVideoTracks()[0];
+    const audioTrack = newStream.getAudioTracks()[0];
+
     peerConnections.forEach((pc) => {
-      const sender = pc.getSenders().find(s => s.track.kind === 'video');
-      if (sender) {
-        sender.replaceTrack(videoTrack);
+      const senders = pc.getSenders();
+      const videoSender = senders.find(sender => sender.track?.kind === 'video');
+      if (videoSender) {
+        videoSender.replaceTrack(videoTrack);
       }
     });
-    
-    // Keep the current audio/video enabled state
-    myStream.getVideoTracks()[0].enabled = isVideoEnabled;
-    myStream.getAudioTracks()[0].enabled = isAudioEnabled;
-    
+
+    // Maintain current states
+    videoTrack.enabled = isVideoEnabled;
+    audioTrack.enabled = isAudioEnabled;
+
     // Update button animation
     const switchBtn = document.getElementById('camera-switch-btn');
     switchBtn.classList.add('rotating');
     setTimeout(() => switchBtn.classList.remove('rotating'), 500);
-    
+
     showSuccess('Camera switched successfully');
   } catch (error) {
     console.error('Error switching camera:', error);
