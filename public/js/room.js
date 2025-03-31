@@ -18,6 +18,7 @@ myVideo.muted = true;
 let myStream = null;
 let isVideoEnabled = true;
 let isAudioEnabled = true;
+let currentCameraFacing = 'user'; // Track current camera facing mode
 
 // Store peer connections and user IDs
 const peerConnections = new Map();
@@ -108,10 +109,26 @@ const setupControls = () => {
   const videoBtn = document.querySelector('.fa-video').parentElement;
   const audioBtn = document.querySelector('.fa-microphone').parentElement;
   const leaveBtn = document.querySelector('.fa-phone-slash').parentElement;
+  const switchCameraBtn = document.getElementById('camera-switch-btn');
 
   videoBtn.addEventListener('click', toggleVideo);
   audioBtn.addEventListener('click', toggleAudio);
   leaveBtn.addEventListener('click', leaveRoom);
+
+  // Only show and setup camera switch if device has multiple cameras
+  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
+    navigator.mediaDevices.enumerateDevices()
+      .then(devices => {
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        if (videoDevices.length > 1) {
+          switchCameraBtn.style.display = 'flex';
+          switchCameraBtn.addEventListener('click', switchCamera);
+        }
+      })
+      .catch(err => {
+        console.error('Error enumerating devices:', err);
+      });
+  }
 };
 
 // Toggle video
@@ -150,6 +167,52 @@ const toggleAudio = () => {
       isAudioEnabled,
       roomId: ROOM_ID
     });
+  }
+};
+
+// Switch camera function
+const switchCamera = async () => {
+  try {
+    // Toggle between front and back cameras
+    currentCameraFacing = currentCameraFacing === 'user' ? 'environment' : 'user';
+    
+    // Get new video stream with different camera
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: currentCameraFacing },
+      audio: true
+    });
+    
+    // Stop all tracks on the old stream
+    if (myStream) {
+      myStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Replace old stream with new stream
+    myStream = newStream;
+    myVideo.srcObject = newStream;
+    
+    // Update all peer connections with the new stream
+    const videoTrack = newStream.getVideoTracks()[0];
+    peerConnections.forEach((pc) => {
+      const sender = pc.getSenders().find(s => s.track.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(videoTrack);
+      }
+    });
+    
+    // Keep the current audio/video enabled state
+    myStream.getVideoTracks()[0].enabled = isVideoEnabled;
+    myStream.getAudioTracks()[0].enabled = isAudioEnabled;
+    
+    // Update button animation
+    const switchBtn = document.getElementById('camera-switch-btn');
+    switchBtn.classList.add('rotating');
+    setTimeout(() => switchBtn.classList.remove('rotating'), 500);
+    
+    showSuccess('Camera switched successfully');
+  } catch (error) {
+    console.error('Error switching camera:', error);
+    showError('Failed to switch camera. Please try again.');
   }
 };
 
@@ -447,3 +510,17 @@ socket.on('audio-state-change', (data) => {
     micStatus.className = `mic-status ${isAudioEnabled ? 'unmuted' : 'muted'}`;
   }
 });
+
+// Add CSS for rotation animation
+const style = document.createElement('style');
+style.textContent = `
+  .rotating {
+    animation: rotate 0.5s ease;
+  }
+  
+  @keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);

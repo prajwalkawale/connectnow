@@ -162,6 +162,18 @@
     font-size: 1.25rem;
   }
 
+  /* Hide camera switch button on desktop */
+  #camera-switch-btn {
+    display: none;
+  }
+
+  /* Show camera switch button only on mobile devices */
+  @media (max-width: 640px) {
+    #camera-switch-btn {
+      display: flex;
+    }
+  }
+
   /* Copy link button */
   #copy-link {
     display: flex;
@@ -309,6 +321,9 @@
       </button>
       <button class="control-btn bg-blue-500 hover:bg-blue-600" title="Toggle Audio">
         <i class="fas fa-microphone text-white"></i>
+      </button>
+      <button id="camera-switch-btn" class="control-btn bg-blue-500 hover:bg-blue-600" title="Switch Camera">
+        <i class="fas fa-sync text-white"></i>
       </button>
       <button class="control-btn bg-red-500 hover:bg-red-600" title="Leave Meeting">
         <i class="fas fa-phone-slash text-white"></i>
