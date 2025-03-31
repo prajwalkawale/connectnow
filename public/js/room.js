@@ -117,7 +117,9 @@ const initializeMedia = async () => {
     let videoConstraints;
     if (isMobileDevice) {
       videoConstraints = {
-        facingMode: currentFacingMode
+        facingMode: currentFacingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
       };
     } else {
       videoConstraints = currentCameraDeviceId ? 
@@ -217,16 +219,69 @@ const switchCamera = async () => {
       currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
       console.log(`Switching to ${currentFacingMode} camera`);
 
+      // Stop all tracks before requesting new stream
+      if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+      }
+
+      // Request new stream with specific facing mode
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { exact: currentFacingMode }
+          facingMode: currentFacingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         },
-        audio: true
+        audio: isAudioEnabled // Maintain current audio state
       });
 
-      handleNewStream(newStream);
+      // Get current audio track if it exists
+      let audioTrack = null;
+      if (myStream && myStream.getAudioTracks().length > 0) {
+        audioTrack = myStream.getAudioTracks()[0];
+      }
+
+      // Create a new MediaStream with the new video track and existing audio track
+      const finalStream = new MediaStream();
+      
+      // Add the new video track
+      const videoTrack = newStream.getVideoTracks()[0];
+      if (videoTrack) {
+        finalStream.addTrack(videoTrack);
+      }
+
+      // Add the existing audio track or the new one
+      if (audioTrack) {
+        finalStream.addTrack(audioTrack);
+      } else if (newStream.getAudioTracks().length > 0) {
+        finalStream.addTrack(newStream.getAudioTracks()[0]);
+      }
+
+      // Update local video
+      myVideo.srcObject = finalStream;
+      myStream = finalStream;
+
+      // Update all peer connections with the new video track
+      peerConnections.forEach((pc) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(sender => sender.track?.kind === 'video');
+        if (videoSender && videoTrack) {
+          videoSender.replaceTrack(videoTrack).catch(error => {
+            console.error('Error replacing video track:', error);
+          });
+        }
+      });
+
+      // Maintain video enabled state
+      videoTrack.enabled = isVideoEnabled;
+
+      // Update button animation
+      const switchBtn = document.getElementById('camera-switch-btn');
+      switchBtn.classList.add('rotating');
+      setTimeout(() => switchBtn.classList.remove('rotating'), 500);
+
+      showSuccess('Camera switched successfully');
     } else {
-      // For desktop, cycle through available cameras
+      // Desktop camera switching logic remains the same
       await updateAvailableCameras();
       
       if (availableCameras.length < 2) {
@@ -247,16 +302,10 @@ const switchCamera = async () => {
 
       handleNewStream(newStream);
     }
-
-    // Update button animation
-    const switchBtn = document.getElementById('camera-switch-btn');
-    switchBtn.classList.add('rotating');
-    setTimeout(() => switchBtn.classList.remove('rotating'), 500);
-
-    showSuccess('Camera switched successfully');
   } catch (error) {
     console.error('Error switching camera:', error);
-    showError('Failed to switch camera. Please try again.');
+    console.log('Error details:', error.name, error.message);
+    showError(`Failed to switch camera: ${error.message}`);
   }
 };
 
