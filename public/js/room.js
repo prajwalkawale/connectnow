@@ -25,6 +25,7 @@ let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera M
 let isScreenSharing = false;
 let screenStream = null;
 let cameraStream = null; // Store camera stream when screen sharing
+<<<<<<< HEAD
 
 // Network monitoring
 let networkMonitorInterval = null;
@@ -33,6 +34,8 @@ let networkQuality = {
   status: 'Connecting...',
   lastUpdated: Date.now()
 };
+=======
+>>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
 
 // Store peer connections and user IDs
 const peerConnections = new Map();
@@ -653,12 +656,15 @@ const createVideoElement = (userId, remoteStream) => {
 const leaveRoom = () => {
   console.log('Leaving room...');
   
+<<<<<<< HEAD
   // Stop network monitoring
   if (networkMonitorInterval) {
     clearInterval(networkMonitorInterval);
     networkMonitorInterval = null;
   }
   
+=======
+>>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
   // Stop screen sharing if active
   if (isScreenSharing) {
     stopScreenSharing();
@@ -859,6 +865,7 @@ socket.on('screen-share-state', (data) => {
     }
   }
 });
+<<<<<<< HEAD
 
 // Start monitoring network quality
 const startNetworkMonitoring = () => {
@@ -1029,6 +1036,8 @@ const updateNetworkStatus = (level, status) => {
     networkStatusElement.classList.add('signal-poor');
   }
 };
+=======
+>>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
 
 // Add CSS for rotation animation
 const style = document.createElement('style');
