@@ -78,7 +78,16 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* Mirror effect */
+  }
+
+  /* Mirror effect only for camera video */
+  video:not(.screen-sharing) {
+    transform: scaleX(-1);
+  }
+
+  /* Remove mirror effect for screen sharing */
+  video.screen-sharing {
+    transform: none;
   }
 
   /* Name tag styles */
@@ -324,6 +333,9 @@
       </button>
       <button id="camera-switch-btn" class="control-btn bg-blue-500 hover:bg-blue-600" title="Switch Camera">
         <i class="fas fa-sync text-white"></i>
+      </button>
+      <button id="screen-share-btn" class="control-btn bg-blue-500 hover:bg-blue-600" title="Share Screen">
+        <i class="fas fa-desktop text-white"></i>
       </button>
       <button class="control-btn bg-red-500 hover:bg-red-600" title="Leave Meeting">
         <i class="fas fa-phone-slash text-white"></i>

@@ -23,6 +23,11 @@ let currentFacingMode = 'user'; // Track camera facing mode for mobile
 let availableCameras = [];
 let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+// Screen sharing state
+let isScreenSharing = false;
+let screenStream = null;
+let originalStream = null;
+
 // Store peer connections and user IDs
 const peerConnections = new Map();
 const remotePeers = new Set();
@@ -68,10 +73,12 @@ const setupControls = () => {
   const audioBtn = document.querySelector('.fa-microphone').parentElement;
   const leaveBtn = document.querySelector('.fa-phone-slash').parentElement;
   const switchCameraBtn = document.getElementById('camera-switch-btn');
+  const screenShareBtn = document.getElementById('screen-share-btn');
 
   videoBtn.addEventListener('click', toggleVideo);
   audioBtn.addEventListener('click', toggleAudio);
   leaveBtn.addEventListener('click', leaveRoom);
+  screenShareBtn.addEventListener('click', toggleScreenShare);
 
   // Only show and setup camera switch if device has multiple cameras
   if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
@@ -671,6 +678,106 @@ socket.on('audio-state-change', (data) => {
     micStatus.className = `mic-status ${isAudioEnabled ? 'unmuted' : 'muted'}`;
   }
 });
+
+// Toggle screen sharing
+const toggleScreenShare = async () => {
+  try {
+    if (!isScreenSharing) {
+      // Start screen sharing
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+
+      // Store original stream
+      originalStream = myStream;
+
+      // Create a new stream with screen share video and original audio
+      const newStream = new MediaStream();
+      const screenVideoTrack = screenStream.getVideoTracks()[0];
+      const originalAudioTrack = originalStream.getAudioTracks()[0];
+
+      newStream.addTrack(screenVideoTrack);
+      newStream.addTrack(originalAudioTrack);
+
+      // Update local video
+      myVideo.srcObject = newStream;
+      myStream = newStream;
+
+      // Add screen-sharing class to video element directly
+      myVideo.classList.add('screen-sharing');
+
+      // Update all peer connections with the new video track
+      for (const [peerId, pc] of peerConnections) {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(sender => sender.track?.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(screenVideoTrack);
+        }
+      }
+
+      // Update UI
+      const screenShareBtn = document.getElementById('screen-share-btn');
+      screenShareBtn.classList.add('bg-red-500');
+      screenShareBtn.classList.remove('bg-blue-500');
+      isScreenSharing = true;
+
+      // Handle screen share stop
+      screenVideoTrack.onended = () => {
+        stopScreenShare();
+      };
+
+      showSuccess('Screen sharing started');
+    } else {
+      stopScreenShare();
+    }
+  } catch (error) {
+    console.error('Error toggling screen share:', error);
+    showError('Failed to start screen sharing');
+  }
+};
+
+// Stop screen sharing
+const stopScreenShare = async () => {
+  try {
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      screenStream = null;
+    }
+
+    // Restore original stream
+    if (originalStream) {
+      myVideo.srcObject = originalStream;
+      myStream = originalStream;
+
+      // Update all peer connections with the original video track
+      const originalVideoTrack = originalStream.getVideoTracks()[0];
+      for (const [peerId, pc] of peerConnections) {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(sender => sender.track?.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(originalVideoTrack);
+        }
+      }
+
+      originalStream = null;
+    }
+
+    // Update UI
+    const screenShareBtn = document.getElementById('screen-share-btn');
+    screenShareBtn.classList.remove('bg-red-500');
+    screenShareBtn.classList.add('bg-blue-500');
+    isScreenSharing = false;
+
+    // Remove screen-sharing class from video element
+    myVideo.classList.remove('screen-sharing');
+
+    showSuccess('Screen sharing stopped');
+  } catch (error) {
+    console.error('Error stopping screen share:', error);
+    showError('Failed to stop screen sharing');
+  }
+};
 
 // Add CSS for rotation animation
 const style = document.createElement('style');
