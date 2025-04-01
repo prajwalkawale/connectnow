@@ -149,6 +149,17 @@ io.on('connection', (socket) => {
           });
         }
       });
+
+      // Handle screen sharing state changes
+      socket.on('screen-share-state', (data) => {
+        if (data.roomId === currentRoom) {
+          console.log(`Broadcasting screen share state from ${socket.id} in room ${data.roomId}: ${data.isScreenSharing}`);
+          socket.to(data.roomId).emit('screen-share-state', {
+            userId: socket.id,
+            isScreenSharing: data.isScreenSharing
+          });
+        }
+      });
     });
     
     // Handle user leaving helper function

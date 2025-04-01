@@ -22,11 +22,9 @@ let currentCameraDeviceId = null;
 let currentFacingMode = 'user'; // Track camera facing mode for mobile
 let availableCameras = [];
 let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-// Screen sharing state
 let isScreenSharing = false;
 let screenStream = null;
-let originalStream = null;
+let cameraStream = null; // Store camera stream when screen sharing
 
 // Store peer connections and user IDs
 const peerConnections = new Map();
@@ -384,6 +382,148 @@ const handleNewStream = (newStream) => {
   audioTrack.enabled = isAudioEnabled;
 };
 
+// Toggle screen sharing
+const toggleScreenShare = async () => {
+  const screenShareBtn = document.getElementById('screen-share-btn');
+  
+  try {
+    if (!isScreenSharing) {
+      // Start screen sharing
+      console.log('Starting screen sharing...');
+      
+      // Get screen capture stream
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor'
+        }
+      });
+      
+      // Save current camera stream to restore later
+      cameraStream = myStream;
+      
+      // Create a new stream with screen video and existing audio
+      const newStream = new MediaStream();
+      
+      // Add the screen video track
+      screenStream.getVideoTracks().forEach(track => {
+        track.onended = () => {
+          console.log('Screen sharing stopped by browser UI');
+          stopScreenSharing();
+        };
+        newStream.addTrack(track);
+      });
+      
+      // Add the audio track from camera stream if it exists
+      if (cameraStream && cameraStream.getAudioTracks().length > 0) {
+        const audioTrack = cameraStream.getAudioTracks()[0];
+        newStream.addTrack(audioTrack);
+      }
+      
+      // Update local video element
+      myVideo.srcObject = newStream;
+      
+      // Mark local video container as screen share
+      const localContainer = document.querySelector('[data-peer-id="local"]');
+      if (localContainer) {
+        localContainer.classList.add('screen-share');
+      }
+      
+      // Replace tracks in all peer connections
+      await replaceTracksInPeerConnections(newStream);
+      
+      // Update state and UI
+      myStream = newStream;
+      isScreenSharing = true;
+      screenShareBtn.classList.add('screen-share-active');
+      
+      // Notify other users about screen sharing
+      socket.emit('screen-share-state', {
+        isScreenSharing: true,
+        roomId: ROOM_ID
+      });
+      
+      showSuccess('Screen sharing started');
+    } else {
+      // Stop screen sharing
+      stopScreenSharing();
+    }
+  } catch (error) {
+    console.error('Error toggling screen share:', error);
+    showError(`Failed to ${isScreenSharing ? 'stop' : 'start'} screen sharing: ${error.message}`);
+  }
+};
+
+// Stop screen sharing and revert to camera
+const stopScreenSharing = async () => {
+  try {
+    if (!isScreenSharing || !cameraStream) return;
+    
+    console.log('Stopping screen sharing...');
+    
+    // Stop all screen sharing tracks
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Revert to camera stream
+    myVideo.srcObject = cameraStream;
+    
+    // Remove screen share class from local container
+    const localContainer = document.querySelector('[data-peer-id="local"]');
+    if (localContainer) {
+      localContainer.classList.remove('screen-share');
+    }
+    
+    // Replace tracks in all peer connections
+    await replaceTracksInPeerConnections(cameraStream);
+    
+    // Update state and UI
+    myStream = cameraStream;
+    isScreenSharing = false;
+    screenStream = null;
+    
+    const screenShareBtn = document.getElementById('screen-share-btn');
+    screenShareBtn.classList.remove('screen-share-active');
+    
+    // Notify other users about screen sharing stopped
+    socket.emit('screen-share-state', {
+      isScreenSharing: false,
+      roomId: ROOM_ID
+    });
+    
+    showSuccess('Screen sharing stopped');
+  } catch (error) {
+    console.error('Error stopping screen share:', error);
+    showError(`Failed to stop screen sharing: ${error.message}`);
+  }
+};
+
+// Replace tracks in all peer connections
+const replaceTracksInPeerConnections = async (newStream) => {
+  const videoTrack = newStream.getVideoTracks()[0];
+  
+  try {
+    const promises = [];
+    
+    peerConnections.forEach((pc, peerId) => {
+      const senders = pc.getSenders();
+      const videoSender = senders.find(sender => sender.track?.kind === 'video');
+      
+      if (videoSender && videoTrack) {
+        console.log(`Replacing video track for peer: ${peerId}`);
+        promises.push(videoSender.replaceTrack(videoTrack));
+      }
+    });
+    
+    await Promise.all(promises);
+    console.log('Successfully replaced tracks in all peer connections');
+  } catch (error) {
+    console.error('Error replacing tracks:', error);
+    throw error;
+  }
+};
+
 // Create peer connection
 const createPeerConnection = (userId) => {
   console.log(`Creating peer connection for user ${userId}`);
@@ -501,6 +641,12 @@ const createVideoElement = (userId, remoteStream) => {
 // Leave room
 const leaveRoom = () => {
   console.log('Leaving room...');
+  
+  // Stop screen sharing if active
+  if (isScreenSharing) {
+    stopScreenSharing();
+  }
+  
   socket.emit('leave-room');
   
   // Clean up all peer connections
@@ -679,105 +825,20 @@ socket.on('audio-state-change', (data) => {
   }
 });
 
-// Toggle screen sharing
-const toggleScreenShare = async () => {
-  try {
-    if (!isScreenSharing) {
-      // Start screen sharing
-      screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-      });
-
-      // Store original stream
-      originalStream = myStream;
-
-      // Create a new stream with screen share video and original audio
-      const newStream = new MediaStream();
-      const screenVideoTrack = screenStream.getVideoTracks()[0];
-      const originalAudioTrack = originalStream.getAudioTracks()[0];
-
-      newStream.addTrack(screenVideoTrack);
-      newStream.addTrack(originalAudioTrack);
-
-      // Update local video
-      myVideo.srcObject = newStream;
-      myStream = newStream;
-
-      // Add screen-sharing class to video element directly
-      myVideo.classList.add('screen-sharing');
-
-      // Update all peer connections with the new video track
-      for (const [peerId, pc] of peerConnections) {
-        const senders = pc.getSenders();
-        const videoSender = senders.find(sender => sender.track?.kind === 'video');
-        if (videoSender) {
-          await videoSender.replaceTrack(screenVideoTrack);
-        }
-      }
-
-      // Update UI
-      const screenShareBtn = document.getElementById('screen-share-btn');
-      screenShareBtn.classList.add('bg-red-500');
-      screenShareBtn.classList.remove('bg-blue-500');
-      isScreenSharing = true;
-
-      // Handle screen share stop
-      screenVideoTrack.onended = () => {
-        stopScreenShare();
-      };
-
-      showSuccess('Screen sharing started');
+// Add socket event handler for screen sharing state
+socket.on('screen-share-state', (data) => {
+  const { userId, isScreenSharing } = data;
+  console.log(`User ${userId} screen sharing state changed to: ${isScreenSharing}`);
+  
+  const peerContainer = document.querySelector(`[data-peer-id="${userId}"]`);
+  if (peerContainer) {
+    if (isScreenSharing) {
+      peerContainer.classList.add('screen-share');
     } else {
-      stopScreenShare();
+      peerContainer.classList.remove('screen-share');
     }
-  } catch (error) {
-    console.error('Error toggling screen share:', error);
-    showError('Failed to start screen sharing');
   }
-};
-
-// Stop screen sharing
-const stopScreenShare = async () => {
-  try {
-    if (screenStream) {
-      screenStream.getTracks().forEach(track => track.stop());
-      screenStream = null;
-    }
-
-    // Restore original stream
-    if (originalStream) {
-      myVideo.srcObject = originalStream;
-      myStream = originalStream;
-
-      // Update all peer connections with the original video track
-      const originalVideoTrack = originalStream.getVideoTracks()[0];
-      for (const [peerId, pc] of peerConnections) {
-        const senders = pc.getSenders();
-        const videoSender = senders.find(sender => sender.track?.kind === 'video');
-        if (videoSender) {
-          await videoSender.replaceTrack(originalVideoTrack);
-        }
-      }
-
-      originalStream = null;
-    }
-
-    // Update UI
-    const screenShareBtn = document.getElementById('screen-share-btn');
-    screenShareBtn.classList.remove('bg-red-500');
-    screenShareBtn.classList.add('bg-blue-500');
-    isScreenSharing = false;
-
-    // Remove screen-sharing class from video element
-    myVideo.classList.remove('screen-sharing');
-
-    showSuccess('Screen sharing stopped');
-  } catch (error) {
-    console.error('Error stopping screen share:', error);
-    showError('Failed to stop screen sharing');
-  }
-};
+});
 
 // Add CSS for rotation animation
 const style = document.createElement('style');
