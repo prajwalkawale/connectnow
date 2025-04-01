@@ -25,17 +25,7 @@ let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera M
 let isScreenSharing = false;
 let screenStream = null;
 let cameraStream = null; // Store camera stream when screen sharing
-<<<<<<< HEAD
-
-// Network monitoring
-let networkMonitorInterval = null;
-let networkQuality = {
-  level: 0, // 0-4 (0: disconnected, 1: poor, 2: fair, 3: good, 4: excellent)
-  status: 'Connecting...',
-  lastUpdated: Date.now()
-};
-=======
->>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
+let networkCheckInterval = null;
 
 // Store peer connections and user IDs
 const peerConnections = new Map();
@@ -178,7 +168,7 @@ const initializeMedia = async () => {
     // Set up UI controls
     setupControls();
 
-    // Start network quality monitoring
+    // Start network monitoring
     startNetworkMonitoring();
 
     // Join room after initialization
@@ -656,15 +646,12 @@ const createVideoElement = (userId, remoteStream) => {
 const leaveRoom = () => {
   console.log('Leaving room...');
   
-<<<<<<< HEAD
   // Stop network monitoring
-  if (networkMonitorInterval) {
-    clearInterval(networkMonitorInterval);
-    networkMonitorInterval = null;
+  if (networkCheckInterval) {
+    clearInterval(networkCheckInterval);
+    networkCheckInterval = null;
   }
   
-=======
->>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
   // Stop screen sharing if active
   if (isScreenSharing) {
     stopScreenSharing();
@@ -701,13 +688,11 @@ socket.on('connect', () => {
   console.log('Connected to signaling server');
   loadingOverlay.style.display = 'none';
   initializeMedia();
-  updateNetworkStatus(1, 'Connected to server');
 });
 
 socket.on('connect_error', (error) => {
   console.error('Connection error:', error);
   showError('Connection error. Retrying...');
-  updateNetworkStatus(0, 'Connection error');
 });
 
 socket.on('disconnect', (reason) => {
@@ -715,7 +700,6 @@ socket.on('disconnect', (reason) => {
   if (reason === 'io server disconnect') {
     showError('Server disconnected. Please refresh the page.');
   }
-  updateNetworkStatus(0, 'Disconnected from server');
 });
 
 socket.on('user-connected', async (userId) => {
@@ -865,179 +849,6 @@ socket.on('screen-share-state', (data) => {
     }
   }
 });
-<<<<<<< HEAD
-
-// Start monitoring network quality
-const startNetworkMonitoring = () => {
-  // Update network status initially
-  updateNetworkStatus(0, 'Connecting...');
-  
-  // Monitor connection quality on an interval
-  networkMonitorInterval = setInterval(async () => {
-    if (peerConnections.size === 0) {
-      updateNetworkStatus(0, 'No active connections');
-      return;
-    }
-    
-    // Get the first peer connection for monitoring
-    const firstPeerId = peerConnections.keys().next().value;
-    const pc = peerConnections.get(firstPeerId);
-    
-    if (!pc) {
-      return;
-    }
-    
-    try {
-      const stats = await pc.getStats();
-      let totalRtt = 0;
-      let rttSamples = 0;
-      let packetLoss = 0;
-      let packetLossSamples = 0;
-      let bytesReceived = 0;
-      let bytesSent = 0;
-      
-      stats.forEach(stat => {
-        // Check round trip time
-        if (stat.type === 'remote-inbound-rtp' && stat.roundTripTime) {
-          totalRtt += stat.roundTripTime;
-          rttSamples++;
-        }
-        
-        // Check packet loss
-        if (stat.type === 'remote-inbound-rtp' && stat.packetsLost !== undefined) {
-          packetLoss += stat.packetsLost;
-          packetLossSamples++;
-        }
-        
-        // Check bandwidth
-        if (stat.type === 'inbound-rtp' && stat.bytesReceived) {
-          bytesReceived += stat.bytesReceived;
-        }
-        
-        if (stat.type === 'outbound-rtp' && stat.bytesSent) {
-          bytesSent += stat.bytesSent;
-        }
-      });
-      
-      // Calculate averages
-      const avgRtt = rttSamples > 0 ? (totalRtt / rttSamples) * 1000 : 0; // Convert to ms
-      const avgPacketLoss = packetLossSamples > 0 ? (packetLoss / packetLossSamples) * 100 : 0; // Convert to percentage
-      
-      // Determine connection quality level
-      let level = 0;
-      let status = 'Unknown';
-      
-      // Check connection state first
-      const connectionState = pc.connectionState || pc.iceConnectionState;
-      
-      if (connectionState === 'connected' || connectionState === 'completed') {
-        if (avgRtt < 100 && avgPacketLoss < 1) {
-          level = 4; // Excellent
-          status = 'Excellent';
-        } else if (avgRtt < 200 && avgPacketLoss < 2.5) {
-          level = 3; // Good
-          status = 'Good';
-        } else if (avgRtt < 400 && avgPacketLoss < 5) {
-          level = 2; // Fair
-          status = 'Fair';
-        } else {
-          level = 1; // Poor
-          status = 'Poor';
-        }
-      } else if (connectionState === 'connecting' || connectionState === 'checking') {
-        level = 0;
-        status = 'Connecting...';
-      } else if (connectionState === 'disconnected' || connectionState === 'failed' || connectionState === 'closed') {
-        level = 0;
-        status = 'Disconnected';
-      }
-      
-      // Add RTT info to status for detailed info
-      if (level > 0) {
-        status += ` (${Math.round(avgRtt)}ms`;
-        if (avgPacketLoss > 0) {
-          status += `, ${avgPacketLoss.toFixed(1)}% loss`;
-        }
-        status += ')';
-      }
-      
-      // Update the network quality status
-      updateNetworkStatus(level, status);
-      
-      // Log detailed stats occasionally (every 10 seconds)
-      if (Date.now() - networkQuality.lastUpdated > 10000) {
-        console.log('Network stats:', {
-          rtt: avgRtt.toFixed(2) + 'ms',
-          packetLoss: avgPacketLoss.toFixed(2) + '%',
-          bytesReceived: formatBytes(bytesReceived),
-          bytesSent: formatBytes(bytesSent),
-          connectionState
-        });
-        networkQuality.lastUpdated = Date.now();
-      }
-    } catch (error) {
-      console.error('Error getting connection stats:', error);
-    }
-  }, 2000); // Check every 2 seconds
-};
-
-// Format bytes to human-readable format
-const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0) return '0 Bytes';
-  
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-};
-
-// Update network status indicator
-const updateNetworkStatus = (level, status) => {
-  const networkStatusElement = document.getElementById('networkStatus');
-  if (!networkStatusElement) return;
-  
-  // Only update if changed
-  if (networkQuality.level === level && networkQuality.status === status) {
-    return;
-  }
-  
-  networkQuality.level = level;
-  networkQuality.status = status;
-  
-  // Update signal bars
-  const signalBars = networkStatusElement.querySelectorAll('.signal-bar');
-  signalBars.forEach((bar, index) => {
-    if (index < level) {
-      bar.classList.add('active');
-    } else {
-      bar.classList.remove('active');
-    }
-  });
-  
-  // Update status text
-  const statusText = networkStatusElement.querySelector('.signal-status-text');
-  if (statusText) {
-    statusText.textContent = status;
-  }
-  
-  // Update color class
-  networkStatusElement.classList.remove('signal-excellent', 'signal-good', 'signal-fair', 'signal-poor');
-  
-  if (level === 4) {
-    networkStatusElement.classList.add('signal-excellent');
-  } else if (level === 3) {
-    networkStatusElement.classList.add('signal-good');
-  } else if (level === 2) {
-    networkStatusElement.classList.add('signal-fair');
-  } else if (level === 1) {
-    networkStatusElement.classList.add('signal-poor');
-  }
-};
-=======
->>>>>>> f1d2d8643a3846a5951572be1cfe1434980c5a92
 
 // Add CSS for rotation animation
 const style = document.createElement('style');
@@ -1052,3 +863,108 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+// Start monitoring network quality
+const startNetworkMonitoring = () => {
+  // Initial check
+  checkNetworkQuality();
+  
+  // Set up periodic checks
+  networkCheckInterval = setInterval(checkNetworkQuality, 5000);
+};
+
+// Check network quality
+const checkNetworkQuality = async () => {
+  try {
+    const indicator = document.getElementById('network-indicator');
+    const statusText = indicator.querySelector('.network-status');
+    
+    if (peerConnections.size === 0) {
+      // No connections yet
+      updateNetworkStatus('connecting', 'Connecting...');
+      return;
+    }
+    
+    // Get stats from first peer connection
+    const [peerId, peerConnection] = [...peerConnections.entries()][0];
+    
+    if (!peerConnection) {
+      updateNetworkStatus('unknown', 'Unknown');
+      return;
+    }
+    
+    // Get connection state
+    const connectionState = peerConnection.connectionState;
+    const iceConnectionState = peerConnection.iceConnectionState;
+    
+    if (connectionState === 'failed' || iceConnectionState === 'failed') {
+      updateNetworkStatus('poor', 'Poor');
+      return;
+    }
+    
+    if (connectionState === 'connecting' || iceConnectionState === 'checking') {
+      updateNetworkStatus('connecting', 'Connecting...');
+      return;
+    }
+    
+    // Get detailed stats
+    const stats = await peerConnection.getStats();
+    let roundTripTime = 0;
+    let packetsLost = 0;
+    let totalPackets = 0;
+    let jitter = 0;
+    let statsCount = 0;
+    
+    stats.forEach(stat => {
+      if (stat.type === 'remote-inbound-rtp' || stat.type === 'inbound-rtp') {
+        if (stat.roundTripTime) roundTripTime += stat.roundTripTime;
+        if (stat.packetsLost) packetsLost += stat.packetsLost;
+        if (stat.packetsReceived) totalPackets += stat.packetsReceived;
+        if (stat.jitter) jitter += stat.jitter;
+        statsCount++;
+      }
+    });
+    
+    // Calculate averages
+    if (statsCount > 0) {
+      roundTripTime = roundTripTime / statsCount;
+      jitter = jitter / statsCount;
+    }
+    
+    // Calculate packet loss percentage
+    const packetLossPercent = totalPackets > 0 ? (packetsLost / totalPackets) * 100 : 0;
+    
+    console.log(`Network stats - RTT: ${Math.round(roundTripTime * 1000)}ms, Packet Loss: ${packetLossPercent.toFixed(2)}%, Jitter: ${Math.round(jitter * 1000)}ms`);
+    
+    // Evaluate quality
+    if (roundTripTime < 0.15 && packetLossPercent < 1 && jitter < 0.015) {
+      updateNetworkStatus('excellent', 'Excellent');
+    } else if (roundTripTime < 0.3 && packetLossPercent < 3 && jitter < 0.03) {
+      updateNetworkStatus('good', 'Good');
+    } else if (roundTripTime < 0.5 && packetLossPercent < 8 && jitter < 0.05) {
+      updateNetworkStatus('fair', 'Fair');
+    } else {
+      updateNetworkStatus('poor', 'Poor');
+    }
+  } catch (error) {
+    console.error('Error checking network quality:', error);
+    updateNetworkStatus('unknown', 'Unknown');
+  }
+};
+
+// Update network status UI
+const updateNetworkStatus = (quality, statusText) => {
+  const indicator = document.getElementById('network-indicator');
+  const statusTextElement = indicator.querySelector('.network-status');
+  
+  // Remove existing classes
+  indicator.classList.remove('network-excellent', 'network-good', 'network-fair', 'network-poor');
+  
+  // Add appropriate class
+  if (quality !== 'connecting' && quality !== 'unknown') {
+    indicator.classList.add(`network-${quality}`);
+  }
+  
+  // Update text
+  statusTextElement.textContent = statusText;
+};

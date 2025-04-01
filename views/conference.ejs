@@ -26,52 +26,40 @@
     z-index: 10;
   }
 
-  /* Network status indicator */
-  .network-status {
+  /* Network indicator styles */
+  #network-indicator {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-left: 1rem;
-    padding: 0.25rem 0.75rem;
-    border-radius: 1rem;
+    padding: 0.5rem;
+    border-radius: 20px;
     background: rgba(0, 0, 0, 0.2);
-    font-size: 0.875rem;
-  }
-
-  .signal-bars {
-    display: flex;
-    gap: 1px;
-    height: 1rem;
+    margin-right: 1rem;
   }
 
   .signal-bar {
     width: 4px;
-    border-radius: 1px;
+    height: 16px;
     background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
   }
 
-  .signal-bar.active {
-    background-color: #60A5FA;
-  }
+  .signal-bar:nth-child(2) { height: 12px; }
+  .signal-bar:nth-child(3) { height: 8px; }
+  .signal-bar:nth-child(4) { height: 4px; }
 
-  .signal-excellent .signal-bar.active {
-    background-color: #10B981; /* Green */
-  }
+  /* Network quality classes */
+  .network-excellent .signal-bar { background-color: #10B981; }
+  .network-good .signal-bar:nth-child(1),
+  .network-good .signal-bar:nth-child(2),
+  .network-good .signal-bar:nth-child(3) { background-color: #60A5FA; }
+  .network-fair .signal-bar:nth-child(1),
+  .network-fair .signal-bar:nth-child(2) { background-color: #F59E0B; }
+  .network-poor .signal-bar:nth-child(1) { background-color: #EF4444; }
 
-  .signal-good .signal-bar.active {
-    background-color: #60A5FA; /* Blue */
-  }
-
-  .signal-fair .signal-bar.active {
-    background-color: #F59E0B; /* Yellow/Orange */
-  }
-
-  .signal-poor .signal-bar.active {
-    background-color: #EF4444; /* Red */
-  }
-
-  .signal-status-text {
-    white-space: nowrap;
+  .network-status {
+    font-size: 0.75rem;
+    color: #E5E7EB;
   }
 
   /* Video grid container */
@@ -367,25 +355,25 @@
   <div class="container">
     <!-- Room Info Header -->
     <div class="room-header">
+      <div>
+        <h2 class="text-xl font-bold text-white">Room: <span class="text-blue-400"><%= roomId %></span></h2>
+        <p class="text-sm text-gray-400">Share this code with others to join</p>
+      </div>
       <div class="flex items-center">
-        <div>
-          <h2 class="text-xl font-bold text-white">Room: <span class="text-blue-400"><%= roomId %></span></h2>
-          <p class="text-sm text-gray-400">Share this code with others to join</p>
-        </div>
-        <div class="network-status" id="networkStatus">
-          <div class="signal-bars">
+        <div id="network-indicator">
+          <div class="flex space-x-1">
             <div class="signal-bar"></div>
             <div class="signal-bar"></div>
             <div class="signal-bar"></div>
             <div class="signal-bar"></div>
           </div>
-          <span class="signal-status-text">Connecting...</span>
+          <span class="network-status">Checking...</span>
         </div>
+        <button id="copy-link">
+          <i class="fas fa-copy"></i>
+          <span>Copy Link</span>
+        </button>
       </div>
-      <button id="copy-link">
-        <i class="fas fa-copy"></i>
-        <span>Copy Link</span>
-      </button>
     </div>
     
     <!-- Video Grid -->
