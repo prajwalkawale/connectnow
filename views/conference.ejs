@@ -78,16 +78,20 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform: scaleX(-1); /* Mirror effect */
   }
 
-  /* Mirror effect only for camera video */
-  video:not(.screen-sharing) {
-    transform: scaleX(-1);
+  /* Don't mirror screen shares */
+  .screen-share video {
+    transform: scaleX(1);
+    object-fit: contain; /* Ensure screen fits horizontally */
   }
 
-  /* Remove mirror effect for screen sharing */
-  video.screen-sharing {
-    transform: none;
+  /* Video container with screen share */
+  .video-container.screen-share {
+    aspect-ratio: 16/9;
+    width: 100%;
+    max-width: 1200px;
   }
 
   /* Name tag styles */
@@ -169,6 +173,11 @@
 
   .control-btn i {
     font-size: 1.25rem;
+  }
+
+  /* Screen sharing styles */
+  .screen-share-active {
+    background-color: #10B981 !important;
   }
 
   /* Hide camera switch button on desktop */
