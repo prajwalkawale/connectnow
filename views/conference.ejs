@@ -26,6 +26,54 @@
     z-index: 10;
   }
 
+  /* Network status indicator */
+  .network-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    font-size: 0.875rem;
+  }
+
+  .signal-bars {
+    display: flex;
+    gap: 1px;
+    height: 1rem;
+  }
+
+  .signal-bar {
+    width: 4px;
+    border-radius: 1px;
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .signal-bar.active {
+    background-color: #60A5FA;
+  }
+
+  .signal-excellent .signal-bar.active {
+    background-color: #10B981; /* Green */
+  }
+
+  .signal-good .signal-bar.active {
+    background-color: #60A5FA; /* Blue */
+  }
+
+  .signal-fair .signal-bar.active {
+    background-color: #F59E0B; /* Yellow/Orange */
+  }
+
+  .signal-poor .signal-bar.active {
+    background-color: #EF4444; /* Red */
+  }
+
+  .signal-status-text {
+    white-space: nowrap;
+  }
+
   /* Video grid container */
   #video-grid {
     flex: 1;
@@ -319,9 +367,20 @@
   <div class="container">
     <!-- Room Info Header -->
     <div class="room-header">
-      <div>
-        <h2 class="text-xl font-bold text-white">Room: <span class="text-blue-400"><%= roomId %></span></h2>
-        <p class="text-sm text-gray-400">Share this code with others to join</p>
+      <div class="flex items-center">
+        <div>
+          <h2 class="text-xl font-bold text-white">Room: <span class="text-blue-400"><%= roomId %></span></h2>
+          <p class="text-sm text-gray-400">Share this code with others to join</p>
+        </div>
+        <div class="network-status" id="networkStatus">
+          <div class="signal-bars">
+            <div class="signal-bar"></div>
+            <div class="signal-bar"></div>
+            <div class="signal-bar"></div>
+            <div class="signal-bar"></div>
+          </div>
+          <span class="signal-status-text">Connecting...</span>
+        </div>
       </div>
       <button id="copy-link">
         <i class="fas fa-copy"></i>
