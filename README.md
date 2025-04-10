@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 # ConnectNow
 
 ![image](https://github.com/user-attachments/assets/6733cf8c-f08f-4701-9b7c-35786ab67ea4)
@@ -256,4 +254,3 @@ Icons by Font Awesome
 Contributors
 1.Prajwal Kawale
 2.Bapu Shinde
->>>>>>> 0786fd91e9a6b29f2ceea0e86dbf1d32c6f5399e
